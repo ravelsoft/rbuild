@@ -1,4 +1,5 @@
-{ readFile, writeFile, watchFile } = require \fs
+{ readFile, writeFile, watchFile, stat } = require \fs
+{ Bundler } = require './bundler'
 
 function writeResult (path, data, cbk)
     (err) <- writeFile path, data, \utf-8
@@ -47,6 +48,14 @@ class TaskPool
     createTaskForFile: function (file, outfile, callback)
 
         function fileCallback (error)
+            (err_in, istat) <- stat file
+            (err_out, ostat) <- stat outfile
+
+            if not err_out and istat.mtime <= ostat.mtime
+                # Not compiling to a file that is more recent.
+                console.log "= #file"
+                return
+
             readFile file, \utf-8, (err, data) ->
                 if err
                     console.log "#file: #err"
@@ -58,9 +67,21 @@ class TaskPool
                 catch e
                     console.log "#file: #e"
 
-        @addTask new Task do
+        return @addTask new Task do
             dependencies: [file]
             callback: fileCallback
+
+    /**
+     *
+     */
+    createBundleTask: function (outfile, files, extensions)
+        bundler = new Bundler files: files, watch: @watch, extensions: extensions
+
+        return @addTask new Task do
+            dependencies: [] # The bundler does that.
+            callback: ->
+                (err, data) <- bundler.bundle!
+                console.log "done..."
 
     /**
      *
@@ -69,6 +90,7 @@ class TaskPool
         @tasks.push task
         task.watch = @watch
         task.run!
+        return task
 
 exports <<< { Task, TaskPool }
 
