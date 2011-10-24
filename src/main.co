@@ -1,0 +1,73 @@
+{ exec: exec_child } = require \child_process
+{ readdir, stat, writeFile } = require \fs
+url = require \url
+
+{ Bundler } = require './bundler'
+{ Task, TaskPool } = require './task'
+
+/**
+ *  Execute a command, and call the callback once it's done.
+ *
+ *  @param command A string with the command
+ *  @param callback The callback to call once done.
+ */
+function exec (command, callback)
+    console.log command
+
+    env = {}
+    env <<< process.env
+
+    (error, stdout, stderr) <- exec_child command, env: env
+
+    console.log "stderr: #{stderr}" if stderr
+
+    if error is not null
+        console.log "EXEC ERROR: #{error}"
+
+    if callback
+        callback error, stdout, stderr
+
+/**
+ *  Recursively walk down a directory and call the callback
+ *  for all or part of its contents.
+ *
+ *  @param dirname The path to the directory
+ *  @param pattern An optional pattern against which filenames
+ *      are matched.
+ *  @param callback The callback to call whenever we find the files.
+ *      (abspath, relpath), where abspath is the absolute path of the
+ *      file on the filesystem, and relpath is its relative path
+ *      compared to dirname.
+ */
+function walk (dirname, pattern ? null, callback)
+    if not callback? and pattern is not null and pattern instanceof Function
+        callback = pattern
+        pattern = null
+
+    if callback not instanceof Function
+        throw new Error "callback should be a function"
+
+    basedir = url.resolve process.cwd! + \/, dirname
+
+    function _walk (dirn)
+
+        (err, files) <- readdir dirn
+        for f of files
+            abspath = url.resolve process.cwd! + \/, dirn
+            abspath = url.resolve abspath + \/, f
+
+            relpath = "#dirn/#f".replace basedir + \/, ''
+
+            if pattern is null or abspath.match pattern
+                callback abspath, relpath
+
+            continueIfDirectory = (abspath) ->
+                stat abspath, (err, stat) ->
+                    if stat.isDirectory!
+                        _walk abspath
+            continueIfDirectory abspath
+
+    _walk basedir
+
+
+exports import { exec, walk, Bundler, Task, TaskPool }

@@ -1,0 +1,109 @@
+url = require \url
+
+/**
+ *
+ */
+class Bundler
+    ->
+        @extensions =
+            js: (str) -> str
+                
+    /**
+     *  Add an extension.
+     */
+    addExtension: function (ext, cbk)
+        @extensions[ext] = cbk
+
+
+    # TODO the resolving should be in a replace() callback so that
+    # we don't have to translate module names at runtime !
+
+    /**
+     *  Resolve a module's path from another.
+     *
+     *  First, compute the path difference between the two paths,
+     *  then look for a file with all the registered extensions.
+     *
+     *  There is no promise on the order with which the extensions
+     *  are looked for.
+     *
+     *  Once the file is found, it is read and tranformed according
+     *  to its extension handler.
+     *
+     *  @param base The module where the resolving request's been
+     *      made.
+     *  @param path The path of the module.
+     *  @param callback The callback to execute once we're done with
+     *      the file. (error, contents)
+     */
+    resolve: function (base, path, callback)
+        realpath = url.resolve base, path
+
+        ext = realpath.match /\.([[:alnum:]_]+)$/
+
+    /**
+     *
+     */
+    bundleModule: function (module_name, module_contents)
+        return """
+            __modules_fn['#module_name'] = function (module) {
+                __current_module = '#module_name';
+                exports = module.exports;
+                #module_contents
+                return exports;
+            };
+
+            __modules['#module_name'] = null;
+        """
+    
+    /**
+     *
+     */
+    bundle: function
+        # Fake variable
+        __current_module = null
+
+        /**
+         *
+         */
+        function dirname (path)
+            return path.replace /\\/g, '/'
+                .replace /\/[^\/]*\/?$/, ''
+
+        /**
+         *
+         */
+        function resolve (path)
+            curdir = dirname __current_module
+
+        /**
+         *
+         */
+        function require (path)
+            path = resolve path
+
+            if __modules[path] is null
+                current_bak = __current_module
+                module = exports: {}, id: path
+                res = null
+
+                __modules[path] = module
+                res = __modules_fn[path] module
+                __current_module := current_bak
+                return res
+            else
+                return __modules[path].exports
+
+        res = """
+            var __modules_fn = {};
+            var __modules = {};
+            var __current_module = null;
+
+            #{dirname.toString!}
+            #{resolve.toString!}
+            #{require.toString!}
+        """
+
+        return res
+
+exports import { Bundler }

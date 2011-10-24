@@ -1,0 +1,74 @@
+{ readFile, writeFile, watchFile } = require \fs
+
+function writeResult (path, data, cbk)
+    (err) <- writeFile path, data, \utf-8
+    if err
+        console.log "#path: #err"
+        return
+    cbk?!
+
+/**
+ *  @class Task
+ */
+class Task
+
+    /**
+     *  @constructor
+     */
+    ({ @dependencies ? [], @callback, @watch } ) ->
+        @watching = false
+
+    /**
+     *
+     */
+    run: function
+        if @watch and not @watching
+            @watching = true
+            for f of @dependencies
+                watchFile f, (curr, prev) ~>
+                    if curr.mtime > prev.mtime
+                        @callback!
+        @callback!
+
+/**
+ *  @class TaskPool
+ */
+class TaskPool
+
+    /**
+     *  @constructor
+     */
+    ({ @watch }) ->
+        @tasks = []
+    
+    /**
+     *
+     */
+    createTaskForFile: function (file, outfile, callback)
+
+        function fileCallback (error)
+            readFile file, \utf-8, (err, data) ->
+                if err
+                    console.log "#file: #err"
+                    return
+                try
+                    res = callback data
+                    <- writeResult outfile, res
+                    console.log "#{new Date!.toLocaleTimeString!}: #file => #outfile"
+                catch e
+                    console.log "#file: #e"
+
+        @addTask new Task do
+            dependencies: [file]
+            callback: fileCallback
+
+    /**
+     *
+     */
+    addTask: function (task)
+        @tasks.push task
+        task.watch = @watch
+        task.run!
+
+exports <<< { Task, TaskPool }
+
