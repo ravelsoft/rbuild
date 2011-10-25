@@ -29,6 +29,9 @@ class BundleFile
         @name = "#{basename @path}-#{last_id}"
         last_id := last_id + 1
 
+    getRelativeName: function (path)
+        return @path.replace (dirname path), '.'
+
     /**
      *  Compiles the module, and parse its contents, triggering the calling of 
      *
@@ -52,7 +55,8 @@ class BundleFile
                     break
 
         if not @realpath
-            cbk new Error "The file #{@path} either doesn't exist or doesn't have a valid module handler"
+            cbk new Error "The module #{@path} either doesn't exist or doesn't have a valid module handler"
+            return
 
         (err, body) <~ readFile @realpath, \utf-8
         if err
@@ -67,7 +71,7 @@ class BundleFile
         @error = false
         @deps = []
 
-        @body.replace body_re, (str) ~>
+        @body = @body.replace body_re, (str) ~>
             mod_name = str.replace /.*require\s*\(\s*["']/, ''
                 .replace /['"]\s*\)$/, ''
 
@@ -164,78 +168,89 @@ class Bundler
     /**
      *
      */
-    bundleModule: function (module_name, module_contents)
+    bundleModule: function (mod)
         return """
-            __modules_fn['#module_name'] = function (module) {
-                __current_module = '#module_name';
-                exports = module.exports;
-                #module_contents
-                return exports;
+            __modules_fn['#{mod.name}'] = function (module) {
+                var exports = module.exports;
+                #{mod.body}
             };
-
-            __modules['#module_name'] = null;
+            __modules['#{mod.name}'] = {};
         """
-    
-    /**
-     *
-     */
-    bundle: function
-        @error = false
 
-        processed = 0
-
-        for f of @files
-            <~ @processModules f
-            processed := processed + 1
-            if processed is @files.length
-                console.log "next !"
-
-
-        return
-        # Fake variable
-        __current_module = null
-
-        /**
-         *
-         */
-        function dirname (path)
-            return path.replace /\\/g, '/'
-                .replace /\/[^\/]*\/?$/, ''
-
-        /**
-         *
-         */
-        function resolve (path)
-            curdir = dirname __current_module
+    toplevel: function
 
         /**
          *
          */
         function require (path)
-            path = resolve path
+            if not __modules[path].exports?
+                module = __modules[path]
+                module.exports = {}
 
-            if __modules[path] is null
-                current_bak = __current_module
-                module = exports: {}, id: path
-                res = null
+                __modules_fn[path] module
 
-                __modules[path] = module
-                res = __modules_fn[path] module
-                __current_module := current_bak
-                return res
-            else
-                return __modules[path].exports
+            return __modules[path].exports
 
         res = """
             var __modules_fn = {};
             var __modules = {};
-            var __current_module = null;
 
-            #{dirname.toString!}
-            #{resolve.toString!}
             #{require.toString!}
         """
 
         return res
+    
+    /**
+     *
+     */
+    bundle: function (cbk)
+        @error = false
+
+        processed = 0
+
+        for f of @files
+            (err) <~ @processModules f
+            if err
+                console.log '!! ' + err
+                return
+            processed := processed + 1
+            if processed is @files.length
+
+                result = [@toplevel!]
+
+                modules = {}
+
+                get_modules = (f) ->
+                    if f.name in modules # we already have it.
+                        return
+
+                    modules[f.name] = f
+                    for m of f.deps
+                        get_modules m
+
+                for p of @files
+                    get_modules BundleFile.get p
+
+                for m, f in modules
+                    if m.error
+                        console.log "!! #{m.name} has errors, can't bundle"
+                        cbk new Error "Error in one of the source"
+                        return
+
+                    result.push @bundleModule f
+                
+                first = BundleFile.get @files.0
+
+                alias_list = []
+                
+                for m, f in modules
+                    alias_list.push "__modules['#{f.getRelativeName first.path}'] = __modules['#{f.name}'];"
+                    alias_list.push "__modules_fn['#{f.getRelativeName first.path}'] = __modules_fn['#{f.name}'];" 
+
+                result.push alias_list.join "\n"
+                result = result.join "\n"
+                cbk null, result
+
+
 
 exports import { Bundler }

@@ -81,7 +81,8 @@ class TaskPool
             dependencies: [] # The bundler does that.
             callback: ->
                 (err, data) <- bundler.bundle!
-                console.log "done..."
+                <- writeResult outfile, data
+                console.log "* Wrote #outfile"
 
     /**
      *
