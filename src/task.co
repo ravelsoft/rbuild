@@ -102,8 +102,9 @@ class TaskPool
                         watched.push f
                     )(f)
 
-                <~ writeResult outfile, data
-                console.log "#{new Date!.toLocaleTimeString!} => rewrote bundle #outfile"
+                if not err
+                    <~ writeResult outfile, data
+                    console.log "#{new Date!.toLocaleTimeString!} => rewrote bundle #outfile"
 
     /**
      *

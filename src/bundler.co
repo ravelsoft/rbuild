@@ -67,10 +67,17 @@ class BundleFile
             return
 
         console.log "Compiling #{@realpath}"
-
-        @body = @compile_fn body
-        @error = false
         @deps = []
+        @error = false
+
+        try
+            @body = @compile_fn body
+        catch e
+            console.log "!! #{@realpath}: #e"
+            @body = null
+            @error = true
+            cbk e, null
+            return
 
         @body = @body.replace body_re, (str) ~>
             mod_name = str.replace /.*require\s*\(\s*["']/, ''
@@ -113,10 +120,7 @@ class Bundler
         for ext, fn in extensions
             ((ext, fn) ~>
                 @addExtension ext, (data, path) ->
-                    try
-                        fn data, path
-                    catch e
-                        console.log "!! #path: #e"
+                    fn data, path
             )(ext, fn)
 
     /**
@@ -161,6 +165,9 @@ class Bundler
                 loaded := loaded + 1
                 if loaded is file.deps.length
                     callback err
+
+        else
+            callback err
             
     /**
      *
@@ -213,9 +220,6 @@ class Bundler
 
         for f of @files
             (err) <~ @processModules f
-            if err
-                console.log '!! ' + err
-                return
             processed := processed + 1
             if processed is @files.length
 
@@ -236,8 +240,8 @@ class Bundler
                     get_modules BundleFile.get p
 
                 for m, f in modules
-                    if m.error
-                        console.log "!! #{m.name} has errors, can't bundle"
+                    if f.error
+                        console.log "!! #{f.path} has errors, can't bundle"
                         cbk new Error "Error in one of the source"
                         return
 
