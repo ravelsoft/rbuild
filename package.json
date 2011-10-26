@@ -3,7 +3,7 @@
     "description" : "A build framework made to watch source files and recompile them on the fly. Kind of like cake, jake and coke, but with its own flavor !",
     "keywords" : ["build"],
     "author" : "Christophe Eymard <christophe.eymard@ravelsoft.com> (http://www.ravelsoft.com)",
-    "version" : "0.0.1",
+    "version" : "0.0.2",
     "homepage" : "http://github.com/ravelsoft/rbuild",
     "repository" : {
         "type": "git", 
@@ -18,7 +18,8 @@
     "directories" : {"lib" : "./lib"  },
     "main" : "./lib/main",
     "bin" : {},
-     "dependencies" : {},
+     "dependencies" : {
+     },
      "devDependencies" : {
         "coco": "0.6.x"
      }

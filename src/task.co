@@ -1,5 +1,5 @@
-{ readFile, writeFile, watchFile, stat } = require \fs
-{ Bundler } = require './bundler'
+{ readFile, writeFile, watchFile, unwatchFile, stat } = require \fs
+{ Bundler, BundleFile } = require './bundler'
 
 function writeResult (path, data, cbk)
     (err) <- writeFile path, data, \utf-8
@@ -63,26 +63,47 @@ class TaskPool
                 try
                     res = callback data
                     <- writeResult outfile, res
-                    console.log "#{new Date!.toLocaleTimeString!}: #file => #outfile"
+                    console.log "#{new Date!.toLocaleTimeString!} => #file > #outfile"
                 catch e
                     console.log "#file: #e"
 
         return @addTask new Task do
             dependencies: [file]
             callback: fileCallback
+            watch: @watch
 
     /**
      *
      */
     createBundleTask: function (outfile, files, extensions)
-        bundler = new Bundler files: files, watch: @watch, extensions: extensions
+        bundler = new Bundler files: files, extensions: extensions
+        watched = []
+        files = []
 
         return @addTask new Task do
             dependencies: [] # The bundler does that.
-            callback: ->
-                (err, data) <- bundler.bundle!
-                <- writeResult outfile, data
-                console.log "* Wrote #outfile"
+            callback: ~function recompileFiles
+                (err, data) <~ bundler.bundle!
+
+                files := (f.realpath for k, f in bundler.modules ? {})
+
+                # Add the files that are not being watched.
+                for f of files
+                    ((f) ->
+                        if f of watched
+                            return
+
+                        watchFile f, (cur, prev) ->
+                            BundleFile.get f .recompile = true
+
+                            if cur.mtime > prev.mtime and f of files
+                                recompileFiles!
+
+                        watched.push f
+                    )(f)
+
+                <~ writeResult outfile, data
+                console.log "#{new Date!.toLocaleTimeString!} => rewrote bundle #outfile"
 
     /**
      *
