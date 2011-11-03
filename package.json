@@ -19,6 +19,7 @@
     "main" : "./lib/main",
     "bin" : {},
      "dependencies" : {
+        "async": "0.1.x"
      },
      "devDependencies" : {
         "coco": "0.6.x"

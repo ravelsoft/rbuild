@@ -1,4 +1,5 @@
 { exec: exec_child } = require \child_process
+{ queue } = require \async
 { readdir, stat, writeFile } = require \fs
 url = require \url
 
@@ -38,8 +39,9 @@ function exec (command, callback)
  *      (abspath, relpath), where abspath is the absolute path of the
  *      file on the filesystem, and relpath is its relative path
  *      compared to dirname.
+ *  @param endcallback the callback to call when the walking is completely over.
  */
-function walk (dirname, pattern ? null, callback)
+function walk (dirname, pattern ? null, callback, endcallback ? null)
     if not callback? and pattern is not null and pattern instanceof Function
         callback = pattern
         pattern = null
@@ -47,10 +49,7 @@ function walk (dirname, pattern ? null, callback)
     if callback not instanceof Function
         throw new Error "callback should be a function"
 
-    basedir = url.resolve process.cwd! + \/, dirname
-
-    function _walk (dirn)
-
+    function _walk (dirn, cb)
         (err, files) <- readdir dirn
         for f of files
             abspath = url.resolve process.cwd! + \/, dirn
@@ -62,12 +61,28 @@ function walk (dirname, pattern ? null, callback)
                 callback abspath, relpath
 
             continueIfDirectory = (abspath) ->
-                stat abspath, (err, stat) ->
+                q.push (cb) ->
+                    (err, stat) <- stat abspath
                     if stat.isDirectory!
-                        _walk abspath
-            continueIfDirectory abspath
+                        q.push (cb) -> 
+                            _walk abspath, cb
+                    cb!
 
-    _walk basedir
+            continueIfDirectory abspath
+        cb!
+
+    q = queue ((task, cb) ->
+        task cb
+        ), 10
+
+    basedir = url.resolve process.cwd! + \/, dirname
+
+    q.push (cb) ->
+        _walk basedir, cb
+
+    q.drain = -> endcallback?!
+
+    q.process!
 
 
 exports import { exec, walk, Bundler, Task, TaskPool }
